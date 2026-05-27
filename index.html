@@ -1,0 +1,2303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>구구단 대장간2 — Multiplication Blacksmith</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d0d14;
+  --panel: #161624;
+  --panel-border: #2a2a44;
+  --accent: #ff6a00;
+  --accent-glow: #ff8c33;
+  --success: #00e87b;
+  --danger: #ff3a3a;
+  --text: #e8e8f0;
+  --text-dim: #8888aa;
+  --gold: #ffd700;
+  --boss-hp: #e53e3e;
+}
+
+@font-face {
+  font-family: 'GameFont';
+  src: local('Segoe UI'), local('Malgun Gothic');
+}
+
+body {
+  font-family: 'GameFont', 'Malgun Gothic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── Screen Shake ─── */
+@keyframes screenShake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-6px, -4px); }
+  20% { transform: translate(6px, 4px); }
+  30% { transform: translate(-4px, 6px); }
+  40% { transform: translate(4px, -6px); }
+  50% { transform: translate(-2px, 2px); }
+  60% { transform: translate(2px, -2px); }
+  70% { transform: translate(-3px, 3px); }
+  80% { transform: translate(3px, -3px); }
+}
+.shake { animation: screenShake 0.4s ease-out; }
+
+/* ─── Glow pulse ─── */
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 6px var(--accent)); }
+  50% { filter: drop-shadow(0 0 20px var(--accent-glow)) drop-shadow(0 0 40px var(--accent)); }
+}
+
+/* ─── Overheat ─── */
+@keyframes overheat {
+  0% { filter: brightness(1) saturate(1); }
+  20% { filter: brightness(1.8) saturate(2) hue-rotate(-10deg); }
+  50% { filter: brightness(1.4) saturate(1.6) hue-rotate(-5deg); }
+  100% { filter: brightness(1) saturate(1); }
+}
+.overheat { animation: overheat 1s ease-out; }
+
+/* ─── Forge spark ─── */
+@keyframes sparkFly {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0); }
+}
+
+/* ─── Float up text ─── */
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-80px) scale(1.3); }
+}
+
+/* ─── Boss attack ─── */
+@keyframes bossHit {
+  0% { transform: translateX(0); }
+  15% { transform: translateX(-20px) rotate(-5deg); }
+  30% { transform: translateX(15px) rotate(3deg); }
+  45% { transform: translateX(-10px) rotate(-2deg); }
+  60% { transform: translateX(5px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes swordSlash {
+  0% { transform: rotate(0deg) translateX(0); }
+  30% { transform: rotate(-30deg) translateX(-20px); }
+  50% { transform: rotate(15deg) translateX(40px); }
+  100% { transform: rotate(0deg) translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes progressFill {
+  from { width: 0; }
+}
+
+@keyframes damageFlash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(255, 58, 58, 0.3); }
+}
+
+/* ─── Header ─── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--panel);
+  border-bottom: 2px solid var(--panel-border);
+}
+.header h1 {
+  font-size: 1.3rem;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.header-stats span { display: flex; align-items: center; gap: 5px; }
+.header-stats .val { color: var(--gold); font-weight: bold; }
+.btn-stats {
+  background: var(--panel-border);
+  border: 1px solid #3a3a5a;
+  color: var(--text);
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: 0.2s;
+}
+.btn-stats:hover { background: #3a3a5a; }
+
+/* ─── Main Layout ─── */
+.game-container {
+  display: flex;
+  gap: 0;
+  height: calc(100vh - 56px);
+}
+
+/* Left panel: forge area */
+.forge-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  background: radial-gradient(ellipse at bottom, #1a1018 0%, var(--bg) 70%);
+  overflow: hidden;
+}
+
+.forge-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.25;
+  pointer-events: none;
+  overflow: hidden;
+}
+.forge-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(3px) brightness(0.6);
+}
+
+.stage-label {
+  font-size: 1rem;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  z-index: 1;
+}
+
+.sword-display {
+  position: relative;
+  width: 200px;
+  height: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.sword-display img {
+  max-width: 100%;
+  max-height: 100%;
+  mix-blend-mode: screen;
+  transition: transform 0.3s;
+}
+.sword-display.forging img {
+  animation: glowPulse 1.5s infinite;
+}
+
+.spark-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: sparkFly 0.6s ease-out forwards;
+}
+
+.upgrade-level {
+  margin-top: 12px;
+  font-size: 1.4rem;
+  font-weight: bold;
+  z-index: 1;
+}
+.upgrade-level .level-text {
+  background: linear-gradient(180deg, var(--gold), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.forge-progress {
+  width: 80%;
+  max-width: 280px;
+  height: 10px;
+  background: #222238;
+  border-radius: 5px;
+  margin-top: 12px;
+  overflow: hidden;
+  z-index: 1;
+}
+.forge-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  border-radius: 5px;
+  transition: width 0.4s ease;
+}
+
+.message-area {
+  margin-top: 16px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1;
+}
+.message {
+  font-size: 1.1rem;
+  font-weight: bold;
+  animation: fadeIn 0.3s ease;
+}
+.message.success { color: var(--success); }
+.message.fail { color: var(--danger); }
+
+/* Right panel: input area */
+.input-panel {
+  width: 380px;
+  background: var(--panel);
+  border-left: 2px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.dan-info {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.dan-info .dan-number {
+  font-size: 2.8rem;
+  font-weight: bold;
+  color: var(--accent);
+}
+.dan-info .dan-label {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+.question-display {
+  text-align: center;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #1a1a30;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+}
+.question-display .question-text {
+  font-size: 2.2rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+.question-display .question-text .op { color: var(--accent); }
+.question-display .question-text .eq { color: var(--gold); }
+
+.answer-input-row {
+  margin-bottom: 16px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.answer-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a1a30;
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 2rem;
+  text-align: center;
+  padding: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.answer-input:focus { border-color: var(--accent); }
+.answer-input.correct { border-color: var(--success); background: rgba(0, 232, 123, 0.08); }
+.answer-input.wrong { border-color: var(--danger); background: rgba(255, 58, 58, 0.08); }
+
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.numpad button {
+  background: #222238;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.4rem;
+  padding: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.numpad button:hover { background: #2e2e48; }
+.numpad button:active { background: var(--accent); color: #fff; transform: scale(0.95); }
+.numpad .btn-clear { color: var(--danger); }
+.numpad .btn-enter {
+  background: var(--accent);
+  color: #fff;
+  font-weight: bold;
+}
+.numpad .btn-enter:hover { background: var(--accent-glow); }
+
+/* ─── Hint (coolant) ─── */
+.hint-box {
+  margin-top: 16px;
+  padding: 14px;
+  background: rgba(0, 120, 255, 0.1);
+  border: 1px solid rgba(0, 120, 255, 0.3);
+  border-radius: 10px;
+  display: none;
+  animation: fadeIn 0.4s ease;
+}
+.hint-box.visible { display: block; }
+.hint-box .hint-title {
+  font-size: 0.9rem;
+  color: #4da6ff;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hint-box .hint-content {
+  font-size: 1.1rem;
+  color: #88ccff;
+  font-weight: bold;
+}
+
+/* ─── Right-panel progress pills ─── */
+.dan-progress-pills {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: auto;
+  padding-top: 16px;
+}
+.pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  background: #222238;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  transition: 0.3s;
+}
+.pill.mastered {
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  color: #000;
+  border-color: var(--gold);
+}
+.pill.current {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 106, 0, 0.4);
+}
+
+/* ─── Boss Overlay ─── */
+.boss-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.5s ease;
+  padding: 16px;
+}
+.boss-overlay.active { display: flex; }
+
+.boss-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 32px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 96vh;
+}
+
+/* ── Left: battle panel ── */
+.boss-left {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.boss-hp-container {
+  width: 100%;
+  max-width: 340px;
+}
+.boss-name {
+  font-size: 1.1rem;
+  color: var(--danger);
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-align: center;
+}
+.boss-hp-bar {
+  height: 16px;
+  background: #333;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #555;
+}
+.boss-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--danger), #ff6666);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.boss-scene {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 24px;
+}
+.player-sprite {
+  width: 100px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-sprite img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.player-sprite.attacking { animation: swordSlash 0.4s ease; }
+
+.boss-sprite {
+  width: 150px;
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.boss-sprite img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: opacity 0.12s ease;
+}
+.boss-sprite.boss-img-pending > img {
+  opacity: 0;
+}
+.boss-sprite.hit { animation: bossHit 0.5s ease; }
+
+.boss-attack-effect {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.boss-attack-effect img {
+  max-width: 120%;
+  max-height: 120%;
+  object-fit: contain;
+}
+.boss-attack-effect.active {
+  opacity: 1;
+  animation: attackEffectFade 0.6s ease-out forwards;
+}
+@keyframes attackEffectFade {
+  0%   { opacity: 1; transform: scale(0.8); }
+  40%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+.boss-question {
+  font-size: 2rem;
+  font-weight: bold;
+  text-align: center;
+}
+.boss-question .op { color: var(--accent); }
+.boss-question .eq { color: var(--gold); }
+
+.boss-message {
+  font-size: 1rem;
+  height: 26px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.boss-attempts-left {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-align: center;
+}
+.boss-attempts-left.warning { color: var(--danger); font-weight: bold; }
+
+/* ── Right: input panel ── */
+.boss-right {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.boss-input-row {
+  display: flex;
+  justify-content: center;
+}
+.boss-answer-input {
+  background: #1a1a30;
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1.6rem;
+  text-align: center;
+  padding: 8px 12px;
+  width: 100%;
+  max-width: 200px;
+  outline: none;
+}
+.boss-answer-input:focus { border-color: var(--accent); }
+
+.boss-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  max-width: 210px;
+}
+.boss-numpad button {
+  background: #222238;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.3rem;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.boss-numpad button:hover { background: #2e2e48; }
+.boss-numpad button:active { background: var(--accent); color: #fff; transform: scale(0.95); }
+.boss-numpad .btn-clear { color: var(--danger); }
+.boss-numpad .btn-enter {
+  background: var(--danger);
+  color: #fff;
+  font-weight: bold;
+}
+.boss-numpad .btn-enter:hover { background: #ff4444; }
+
+/* ── Portrait / narrow screens: stack vertically ── */
+@media (max-width: 600px), (orientation: portrait) {
+  .boss-layout {
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .boss-left { gap: 6px; }
+  .boss-right { flex: 0 0 auto; }
+  .boss-scene { gap: 16px; }
+  .player-sprite { width: 80px; height: 120px; }
+  .boss-sprite { width: 120px; height: 150px; }
+  .boss-question { font-size: 1.6rem; }
+  .boss-numpad { max-width: 240px; }
+  .boss-numpad button { padding: 10px; font-size: 1.2rem; }
+}
+
+.boss-damage-text {
+  position: absolute;
+  color: var(--gold);
+  font-size: 2rem;
+  font-weight: bold;
+  pointer-events: none;
+  animation: floatUp 0.8s ease-out forwards;
+}
+
+/* ─── Stats Overlay ─── */
+.stats-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.stats-overlay.active { display: flex; }
+
+.stats-panel {
+  background: var(--panel);
+  border: 2px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 32px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: fadeIn 0.3s ease;
+}
+.stats-panel h2 {
+  font-size: 1.4rem;
+  color: var(--gold);
+  margin-bottom: 20px;
+  text-align: center;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: #1a1a30;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-card .stat-value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: var(--accent);
+}
+.stat-card .stat-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.recent-chart {
+  margin-bottom: 20px;
+}
+.recent-chart h3 {
+  font-size: 1rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.recent-bar-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 60px;
+  padding: 4px 0;
+}
+.recent-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: 0.2s;
+}
+.recent-bar.correct { background: var(--success); }
+.recent-bar.wrong { background: var(--danger); }
+.recent-bar.empty { background: #222238; }
+
+.dan-mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.dan-mastery-card {
+  background: #1a1a30;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid var(--panel-border);
+}
+.dan-mastery-card.mastered { border-color: var(--success); }
+.dan-mastery-card .dan-num {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+.dan-mastery-card .dan-status {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.dan-mastery-card.mastered .dan-status { color: var(--success); }
+
+.btn-close-stats {
+  display: block;
+  margin: 0 auto;
+  background: var(--panel-border);
+  border: none;
+  color: var(--text);
+  padding: 10px 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.btn-close-stats:hover { background: #3a3a5a; }
+
+/* ─── Victory Overlay ─── */
+.victory-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.victory-overlay.active { display: flex; }
+.victory-overlay h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(90deg, var(--gold), var(--accent), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+.victory-overlay .victory-sub {
+  font-size: 1.1rem;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+.victory-sword {
+  width: 180px;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  animation: glowPulse 2s infinite;
+}
+.victory-sword img {
+  max-width: 100%;
+  max-height: 100%;
+  mix-blend-mode: screen;
+}
+.btn-restart {
+  background: linear-gradient(135deg, var(--gold), var(--accent));
+  border: none;
+  color: #000;
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 14px 40px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 16px;
+}
+.btn-restart:hover { transform: scale(1.05); }
+
+/* ─── Start Screen ─── */
+.start-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  transition: opacity 0.5s;
+}
+.start-overlay.hidden { opacity: 0; pointer-events: none; }
+.start-overlay h1 {
+  font-size: 2.4rem;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+.start-overlay .sub {
+  color: var(--text-dim);
+  margin-bottom: 32px;
+  font-size: 1rem;
+}
+.start-sword {
+  width: 140px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+.start-sword img {
+  max-width: 100%;
+  max-height: 100%;
+  mix-blend-mode: screen;
+  animation: glowPulse 2s infinite;
+}
+.btn-start {
+  background: linear-gradient(135deg, var(--accent), #e05500);
+  border: none;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: bold;
+  padding: 16px 52px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn-start:hover { transform: scale(1.06); box-shadow: 0 6px 30px rgba(255, 106, 0, 0.5); }
+.btn-continue {
+  margin-top: 12px;
+  background: transparent;
+  border: 2px solid var(--panel-border);
+  color: var(--text-dim);
+  font-size: 1rem;
+  padding: 12px 40px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.btn-continue:hover { border-color: var(--accent); color: var(--text); }
+.btn-continue.hidden { display: none; }
+.btn-multi {
+  margin-top: 12px;
+  background: transparent;
+  border: 2px solid var(--panel-border);
+  color: var(--text-dim);
+  font-size: 1rem;
+  padding: 12px 40px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.btn-multi:hover { border-color: var(--accent); color: var(--text); }
+
+/* ─── Floating text ─── */
+.float-text {
+  position: fixed;
+  pointer-events: none;
+  font-size: 1.6rem;
+  font-weight: bold;
+  z-index: 50;
+  animation: floatUp 1s ease-out forwards;
+}
+
+/* ─── Forge Fail Flash ─── */
+@keyframes failFlash {
+  0%   { background: rgba(255, 30, 30, 0); }
+  15%  { background: rgba(255, 30, 30, 0.55); }
+  35%  { background: rgba(255, 30, 30, 0.2); }
+  55%  { background: rgba(255, 30, 30, 0.45); }
+  100% { background: rgba(255, 30, 30, 0); }
+}
+@keyframes crackShake {
+  0%   { transform: translate(0,0) rotate(0deg); }
+  10%  { transform: translate(-10px,-6px) rotate(-4deg); }
+  25%  { transform: translate(12px, 8px) rotate(5deg); }
+  40%  { transform: translate(-8px, 4px) rotate(-3deg); }
+  55%  { transform: translate(6px,-4px) rotate(2deg); }
+  70%  { transform: translate(-4px, 2px) rotate(-1deg); }
+  100% { transform: translate(0,0) rotate(0deg); }
+}
+@keyframes swordCrack {
+  0%   { filter: brightness(1); opacity: 1; }
+  20%  { filter: brightness(3) saturate(0); opacity: 0.9; }
+  40%  { filter: brightness(0.5) saturate(0) hue-rotate(0deg); opacity: 0.7; }
+  60%  { filter: brightness(2) saturate(0); opacity: 0.5; }
+  80%  { filter: brightness(0.3) saturate(0); opacity: 0.3; }
+  100% { filter: brightness(1) saturate(0); opacity: 0.6; }
+}
+.fail-flash { animation: failFlash 0.7s ease-out forwards; }
+.crack-shake { animation: crackShake 0.7s ease-out; }
+.sword-crack  { animation: swordCrack 0.8s ease-out forwards; }
+
+/* ─── Fail Overlay ─── */
+.fail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.3s ease;
+}
+.fail-overlay.active { display: flex; }
+.fail-title {
+  font-size: 2.6rem;
+  font-weight: bold;
+  color: var(--danger);
+  text-shadow: 0 0 30px rgba(255,58,58,0.8);
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+.fail-subtitle {
+  font-size: 1.1rem;
+  color: #ff8888;
+  margin-bottom: 8px;
+}
+.fail-downgrade {
+  font-size: 1rem;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+}
+.fail-downgrade b { color: var(--gold); }
+.btn-fail-ok {
+  background: linear-gradient(135deg, var(--danger), #c00);
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 14px 40px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-fail-ok:hover { transform: scale(1.06); box-shadow: 0 4px 24px rgba(255,58,58,0.5); }
+
+/* ─── Touch optimization ─── */
+.btn-start, .btn-continue, .btn-multi,
+.btn-stats, .btn-restart, .btn-fail-ok, .btn-close-stats {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .game-container { flex-direction: column; height: auto; }
+  .forge-panel { min-height: 300px; }
+  .input-panel { width: 100%; border-left: none; border-top: 2px solid var(--panel-border); }
+  .header-stats { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ Start Screen ═══ -->
+<div class="start-overlay" id="startOverlay">
+  <h1>⚔ 구구단 대장간 2 ⚔</h1>
+  <p class="sub">전설의 창을 만들어라!</p>
+  <div class="start-sword">
+    <img src="" id="startSwordImg" alt="초보 대장장이의 녹슨 단검 — 손잡이는 나무, 날은 녹이 슨 회색 철 단검, 흰색 배경, 픽셀아트 스타일" />
+  </div>
+  <button class="btn-start" id="btnStart">🔨 강화 시작!</button>
+  <button class="btn-continue hidden" id="btnContinue">⚡ 이어하기</button>
+  <button class="btn-multi" id="btnMulti">👥 4인 멀티플레이 (전자칠판)</button>
+</div>
+
+<!-- ═══ Header ═══ -->
+<div class="header">
+  <h1>⚔ 구구단 대장간2</h1>
+  <div class="header-stats">
+    <span>정답률 <b class="val" id="headerAccuracy">0%</b></span>
+    <span>정답 <b class="val" id="headerCorrect">0</b></span>
+    <span>최근30 <b class="val" id="headerRecent">-%</b></span>
+  </div>
+  <button class="btn-stats" id="btnOpenStats">📊 통계</button>
+</div>
+
+<!-- ═══ Game Container ═══ -->
+<div class="game-container" id="gameContainer">
+
+  <!-- Left: Forge Panel -->
+  <div class="forge-panel" id="forgePanel">
+    <div class="forge-bg">
+      <img src="forge-bg.png" alt="대장간 배경" />
+    </div>
+    <div class="stage-label" id="stageLabel">2단 강화 중...</div>
+    <div class="sword-display forging" id="swordDisplay">
+      <img src="" id="swordImg" alt="Lv.1 녹슨 단검 — 작고 낡은 철 단검, 녹이 슨 회색 금속 날, 나무 손잡이, 흰색 배경, 판타지 무기 일러스트" />
+      <div class="spark-container" id="sparkContainer"></div>
+    </div>
+    <div class="upgrade-level">
+      <span class="level-text" id="upgradeLevel">Lv.1 녹슨 단창</span>
+    </div>
+    <div class="forge-progress">
+      <div class="forge-progress-bar" id="forgeProgressBar" style="width: 0%"></div>
+    </div>
+    <div class="message-area">
+      <div class="message" id="forgeMessage"></div>
+    </div>
+  </div>
+
+  <!-- Right: Input Panel -->
+  <div class="input-panel">
+    <div class="dan-info">
+      <div class="dan-number" id="danNumber">2</div>
+      <div class="dan-label">단계</div>
+    </div>
+
+    <div class="question-display">
+      <div class="question-text" id="questionText">
+        <span id="qNum1">2</span> <span class="op">×</span> <span id="qNum2">1</span> <span class="eq">=</span> <span id="qMark">?</span>
+      </div>
+    </div>
+
+    <div class="answer-input-row">
+      <input type="text" class="answer-input" id="answerInput" maxlength="3" inputmode="none" autocomplete="off" placeholder="?" readonly />
+    </div>
+
+    <div class="numpad" id="numpad">
+      <button data-val="1">1</button>
+      <button data-val="2">2</button>
+      <button data-val="3">3</button>
+      <button data-val="4">4</button>
+      <button data-val="5">5</button>
+      <button data-val="6">6</button>
+      <button data-val="7">7</button>
+      <button data-val="8">8</button>
+      <button data-val="9">9</button>
+      <button class="btn-clear" data-val="clear">⌫</button>
+      <button data-val="0">0</button>
+      <button class="btn-enter" data-val="enter">강화!</button>
+    </div>
+
+    <div class="hint-box" id="hintBox">
+      <div class="hint-title">💧 냉각수 힌트</div>
+      <div class="hint-content" id="hintContent"></div>
+    </div>
+
+    <div class="dan-progress-pills" id="danPills"></div>
+  </div>
+</div>
+
+<!-- ═══ Boss Overlay ═══ -->
+<div class="boss-overlay" id="bossOverlay">
+  <div class="boss-layout">
+    <!-- Left: battle scene -->
+    <div class="boss-left">
+      <div class="boss-name" id="bossName">🐉 1단계 수호자: 돌 골렘</div>
+      <div class="boss-hp-container">
+        <div class="boss-hp-bar">
+          <div class="boss-hp-fill" id="bossHpFill" style="width: 100%"></div>
+        </div>
+      </div>
+      <div class="boss-scene">
+        <div class="player-sprite" id="playerSprite">
+          <img src="" id="playerImg" alt="대장장이" />
+        </div>
+        <div class="boss-sprite" id="bossSprite">
+          <img src="" id="bossImg" alt="보스" />
+          <div class="boss-attack-effect" id="bossAttackEffect">
+            <img src="attack.gif" alt="공격 임팩트" />
+          </div>
+        </div>
+      </div>
+      <div class="boss-question" id="bossQuestion">
+        <span id="bqNum1">2</span> <span class="op">×</span> <span id="bqNum2">3</span> <span class="eq">=</span> ?
+      </div>
+      <div class="boss-message" id="bossMessage"></div>
+      <div class="boss-attempts-left" id="bossAttemptsLeft"></div>
+    </div>
+    <!-- Right: input panel -->
+    <div class="boss-right">
+      <div class="boss-input-row">
+        <input type="text" class="boss-answer-input" id="bossAnswerInput" maxlength="3" inputmode="none" autocomplete="off" placeholder="?" readonly />
+      </div>
+      <div class="boss-numpad" id="bossNumpad">
+        <button data-val="1">1</button>
+        <button data-val="2">2</button>
+        <button data-val="3">3</button>
+        <button data-val="4">4</button>
+        <button data-val="5">5</button>
+        <button data-val="6">6</button>
+        <button data-val="7">7</button>
+        <button data-val="8">8</button>
+        <button data-val="9">9</button>
+        <button class="btn-clear" data-val="clear">⌫</button>
+        <button data-val="0">0</button>
+        <button class="btn-enter" data-val="enter">공격!</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Stats Overlay ═══ -->
+<div class="stats-overlay" id="statsOverlay">
+  <div class="stats-panel">
+    <h2>📊 대장장이 기록부</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statTotal">0</div>
+        <div class="stat-label">총 정답 수</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statAccuracy">0%</div>
+        <div class="stat-label">전체 정답률</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statRecent30">-%</div>
+        <div class="stat-label">최근 30문제 정답률</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statSpeedrun">--:--</div>
+        <div class="stat-label">최단 완주 시간</div>
+      </div>
+    </div>
+    <div class="recent-chart">
+      <h3>최근 30문제 기록</h3>
+      <div class="recent-bar-container" id="recentBars"></div>
+    </div>
+    <h3 style="font-size:1rem;color:var(--text-dim);margin-bottom:10px;">단수별 마스터 현황</h3>
+    <div class="dan-mastery-grid" id="danMasteryGrid"></div>
+    <button class="btn-close-stats" id="btnCloseStats">닫기</button>
+  </div>
+</div>
+
+<!-- ═══ Forge Fail Overlay ═══ -->
+<div class="fail-overlay" id="failOverlay">
+  <div class="fail-title">💥 강화 실패!</div>
+  <div class="fail-subtitle" id="failSubtitle">틀린 답으로 창이 망가졌습니다…</div>
+  <div class="fail-downgrade" id="failDowngrade"></div>
+  <button class="btn-fail-ok" id="btnFailOk">⚒ 다시 도전!</button>
+</div>
+
+<!-- ═══ Boss Defeat Overlay ═══ -->
+<div class="fail-overlay" id="bossDefeatOverlay">
+  <div class="fail-title" id="bossDefeatTitle">💀 보스 토벌 실패!</div>
+  <div class="fail-subtitle" id="bossDefeatSubtitle"></div>
+  <div class="fail-downgrade" id="bossDefeatDowngrade"></div>
+  <button class="btn-fail-ok" id="btnBossDefeatOk">⚒ 처음부터 다시 강화!</button>
+</div>
+
+<!-- ═══ Victory Overlay ═══ -->
+<div class="victory-overlay" id="victoryOverlay">
+  <h1>🏆 전설의 창 완성! 🏆</h1>
+  <p class="victory-sub">모든 구구단을 정복했습니다!</p>
+  <div class="victory-sword">
+    <img src="" id="victorySwordImg" alt="전설의 검 — 금빛과 파란 마법 빛이 감도는 거대한 장검, 보석이 박힌 화려한 십자형 가드, 빛나는 오라, 흰색 배경, 에픽 판타지 무기 일러스트" />
+  </div>
+  <div class="stat-value" id="victoryTime">00:00</div>
+  <p class="victory-sub">완주 시간</p>
+  <button class="btn-restart" id="btnRestart">🔄 처음부터 다시 도전!</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// AudioContext: 금속 타격음 합성
+// ═══════════════════════════════════════════════════════════
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playHitSound() {
+  ensureAudioCtx();
+  const t = audioCtx.currentTime;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(800, t);
+  osc.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(2000, t);
+  filter.Q.setValueAtTime(1, t);
+
+  gain.gain.setValueAtTime(0.5, t);
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(t);
+  osc.stop(t + 0.15);
+
+  const noise = audioCtx.createBufferSource();
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+  noise.buffer = buf;
+
+  const nGain = audioCtx.createGain();
+  nGain.gain.setValueAtTime(0.4, t);
+  nGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+
+  const nFilter = audioCtx.createBiquadFilter();
+  nFilter.type = 'highpass';
+  nFilter.frequency.setValueAtTime(4000, t);
+
+  noise.connect(nFilter);
+  nFilter.connect(nGain);
+  nGain.connect(audioCtx.destination);
+  noise.start(t);
+  noise.stop(t + 0.1);
+}
+
+function playFailSound() {
+  ensureAudioCtx();
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.linearRampToValueAtTime(80, t + 0.3);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + 0.3);
+}
+
+const blacksmithSfx = new Audio('blacksmith.mp3');
+blacksmithSfx.preload = 'auto';
+
+const attackSwingSfx = new Audio('quick-swing-sound-419581.mp3');
+attackSwingSfx.preload = 'auto';
+
+function playBlacksmithSound() {
+  blacksmithSfx.currentTime = 0;
+  blacksmithSfx.play().catch(() => {});
+}
+
+function playAttackSwingSound() {
+  attackSwingSfx.currentTime = 0;
+  attackSwingSfx.play().catch(() => {});
+}
+
+function playVictorySound() {
+  ensureAudioCtx();
+  const t = audioCtx.currentTime;
+  [523, 659, 784, 1047].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t + i * 0.12);
+    gain.gain.setValueAtTime(0.3, t + i * 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.12 + 0.4);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t + i * 0.12);
+    osc.stop(t + i * 0.12 + 0.4);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// 검 등급 데이터
+// ═══════════════════════════════════════════════════════════
+const SWORD_LEVELS = [
+  { name: 'Lv.1 녹슨 단창',        alt: 'Lv.1 녹슨 단검 — 작고 낡은 철 단검, 녹이 슨 회색 금속 날, 나무 손잡이, 흰색 배경' },
+  { name: 'Lv.2 철 장창',          alt: 'Lv.2 철 장검 — 깨끗한 철 장검, 은색 날, 가죽으로 감긴 손잡이, 흰색 배경' },
+  { name: 'Lv.3 강철 창',          alt: 'Lv.3 강철 검 — 날카로운 강철 검, 미세한 푸른 광택, 금속 가드, 흰색 배경' },
+  { name: 'Lv.4 마법 부여 창',      alt: 'Lv.4 마법 부여 검 — 날에 파란 마법 룬이 새겨진 검, 은빛 가드, 약간의 빛 오라, 흰색 배경' },
+  { name: 'Lv.5 번개 창',          alt: 'Lv.5 화염 검 — 불꽃이 타오르는 빨간 날, 흑철 가드, 주황빛 오라, 흰색 배경' },
+  { name: 'Lv.6 용의 창',          alt: 'Lv.6 번개 검 — 전기 번개가 감도는 노란 날, 금속 가드, 파란 전기 스파크, 흰색 배경' },
+  { name: 'Lv.7 천사의 창',          alt: 'Lv.7 용의 검 — 용의 비늘 문양이 새겨진 녹색 날, 드래곤 머리 형태 가드, 마법 오라, 흰색 배경' },
+  { name: 'Lv.8 여신의 창',       alt: 'Lv.8 성스러운 검 — 금빛으로 빛나는 신성한 검, 날개 형태 가드, 하얀 빛 오라, 흰색 배경' },
+  { name: '★ 전설의 창 ★',         alt: '전설의 검 — 금빛과 파란 마법 빛이 감도는 거대한 장검, 보석이 박힌 화려한 가드, 눈부신 오라, 흰색 배경' },
+];
+
+/** swordLevel 0~8 → sword-01.png.png ~ sword-09.png.png (index.html과 같은 폴더) */
+function swordImagePath(fileIndex1to9) {
+  const n = Math.min(Math.max(fileIndex1to9, 1), 9);
+  return `sword-${String(n).padStart(2, '0')}.png.png`;
+}
+
+/** index.html과 같은 폴더의 보스·플레이어 일러스트 PNG */
+const PLAYER_CHARACTER_IMG = 'player-blacksmith.png';
+
+const BOSS_DATA = [
+  { name: '1단계 수호자: 돌 골렘',      hp: 3, img: 'boss-02-goblin.png',      alt: '고블린 — 작은 녹색 고블린, 나무 곤봉, 판타지 몬스터' },
+  { name: '2단계 수호자: 오크 전사',    hp: 3, img: 'boss-03-skeleton.png',    alt: '스켈레톤 — 뼈로 된 전사, 녹슨 검과 방패, 판타지 몬스터' },
+  { name: '3단계 수호자: 웨어 베어',    hp: 4, img: 'boss-04-orc.png',         alt: '오크 전사 — 근육질 녹색 오크, 거대한 도끼, 판타지 몬스터' },
+  { name: '4단계 수호자: 아이언 나이트',    hp: 4, img: 'boss-05-werewolf.png',     alt: '늑대인간 — 이족보행 회색 늑대인간, 날카로운 발톱, 판타지 몬스터' },
+  { name: '5단계 수호자: 다크 리치',  hp: 5, img: 'boss-06-dark-knight.png',  alt: '다크 나이트 — 검은 갑옷의 기사, 거대한 흑검, 빨간 눈, 판타지 몬스터' },
+  { name: '6단계 수호자: 블랙 드래곤',        hp: 5, img: 'boss-07-lich.png',        alt: '리치 — 해골 마법사, 보라색 로브, 해골 지팡이, 마법 오라, 판타지 몬스터' },
+  { name: '7단계 수호자: 앤트 나이트',  hp: 6, img: 'boss-08-dragon.png',      alt: '레드 드래곤 — 거대한 빨간 용, 날개를 펼침, 화염 브레스, 판타지 몬스터' },
+  { name: '8단계 최종 보스: 갤럭시 나이트',      hp: 7, img: 'boss-09-demon-lord.png',  alt: '마왕 — 거대한 뿔이 달린 악마 군주, 검은 갑옷, 보라색 불꽃 오라, 판타지 최종 보스' },
+];
+
+
+const bossImgPreloadPromises = new Map();
+function preloadBossImage(url) {
+  if (!url) return Promise.resolve();
+  let p = bossImgPreloadPromises.get(url);
+  if (p) return p;
+  p = new Promise((resolve) => {
+    const im = new Image();
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      im.onload = im.onerror = null;
+      resolve();
+    };
+    im.onload = done;
+    im.onerror = done;
+    im.src = url;
+    if (im.complete && im.naturalWidth > 0) done();
+  });
+  bossImgPreloadPromises.set(url, p);
+  return p;
+}
+
+function maybePreloadUpcomingBoss() {
+  const dan = state.currentDan;
+  if (dan < 2 || dan > 9) return;
+  const entry = BOSS_DATA[dan - 2];
+  if (entry && entry.img) preloadBossImage(entry.img);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 게임 상태
+// ═══════════════════════════════════════════════════════════
+const DEFAULT_STATE = {
+  currentDan: 2,
+  currentMultiplier: 1,
+  currentQuestionDan: 2,
+  practiceQueue: [],
+  practiceQueueIdx: 0,
+  swordLevel: 0,
+  danMastery: { 2: false, 3: false, 4: false, 5: false, 6: false, 7: false, 8: false, 9: false },
+  speedrunStart: null,
+  inBoss: false,
+  inBossPhase2: false,
+  bossSnapshot: null,
+};
+
+const DEFAULT_STATS = {
+  totalCorrect: 0,
+  totalAttempts: 0,
+  last30Results: [],
+  bestSpeedrun: null,
+};
+
+let state = {};
+let stats = {};
+
+function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+function generatePracticeQueue() {
+  const questions = [];
+  for (let i = 0; i < 9; i++) {
+    questions.push({
+      dan:  Math.floor(Math.random() * 8) + 2,
+      mult: Math.floor(Math.random() * 8) + 2
+    });
+  }
+  state.practiceQueue = questions;
+  state.practiceQueueIdx = 0;
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('multiplicationBlacksmith');
+    const savedStats = localStorage.getItem('multiplicationBlacksmithStats');
+    
+    if (saved) {
+      state = { ...deepCopy(DEFAULT_STATE), ...JSON.parse(saved) };
+    } else {
+      state = deepCopy(DEFAULT_STATE);
+    }
+    
+    if (savedStats) {
+      stats = { ...deepCopy(DEFAULT_STATS), ...JSON.parse(savedStats) };
+    } else {
+      stats = deepCopy(DEFAULT_STATS);
+    }
+    
+    return !!saved;
+  } catch (e) {
+    state = deepCopy(DEFAULT_STATE);
+    stats = deepCopy(DEFAULT_STATS);
+    return false;
+  }
+}
+
+function saveState() {
+  localStorage.setItem('multiplicationBlacksmith', JSON.stringify(state));
+  localStorage.setItem('multiplicationBlacksmithStats', JSON.stringify(stats));
+}
+
+// ═══════════════════════════════════════════════════════════
+// last30Results 큐 관리
+// ═══════════════════════════════════════════════════════════
+function pushResult(isCorrect) {
+  stats.last30Results.push(isCorrect ? 1 : 0);
+  if (stats.last30Results.length > 30) stats.last30Results.shift();
+}
+
+function getRecent30Rate() {
+  if (stats.last30Results.length === 0) return null;
+  const sum = stats.last30Results.reduce((a, b) => a + b, 0);
+  return Math.round((sum / stats.last30Results.length) * 100);
+}
+
+// ═══════════════════════════════════════════════════════════
+// DOM 참조
+// ═══════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+const els = {
+  startOverlay:    $('startOverlay'),
+  btnStart:        $('btnStart'),
+  btnContinue:     $('btnContinue'),
+  gameContainer:   $('gameContainer'),
+  forgePanel:      $('forgePanel'),
+  stageLabel:      $('stageLabel'),
+  swordDisplay:    $('swordDisplay'),
+  swordImg:        $('swordImg'),
+  sparkContainer:  $('sparkContainer'),
+  upgradeLevel:    $('upgradeLevel'),
+  forgeProgressBar:$('forgeProgressBar'),
+  forgeMessage:    $('forgeMessage'),
+  danNumber:       $('danNumber'),
+  qNum1:           $('qNum1'),
+  qNum2:           $('qNum2'),
+  qMark:           $('qMark'),
+  answerInput:     $('answerInput'),
+  failOverlay:     $('failOverlay'),
+  failSubtitle:    $('failSubtitle'),
+  failDowngrade:   $('failDowngrade'),
+  btnFailOk:       $('btnFailOk'),
+  hintBox:         $('hintBox'),
+  hintContent:     $('hintContent'),
+  danPills:        $('danPills'),
+  headerAccuracy:  $('headerAccuracy'),
+  headerCorrect:   $('headerCorrect'),
+  headerRecent:    $('headerRecent'),
+  btnOpenStats:    $('btnOpenStats'),
+  statsOverlay:    $('statsOverlay'),
+  btnCloseStats:   $('btnCloseStats'),
+  statTotal:       $('statTotal'),
+  statAccuracy:    $('statAccuracy'),
+  statRecent30:    $('statRecent30'),
+  statSpeedrun:    $('statSpeedrun'),
+  recentBars:      $('recentBars'),
+  danMasteryGrid:  $('danMasteryGrid'),
+  bossOverlay:        $('bossOverlay'),
+  bossName:           $('bossName'),
+  bossHpFill:         $('bossHpFill'),
+  bossSprite:         $('bossSprite'),
+  bossImg:            $('bossImg'),
+  bossAttackEffect:   $('bossAttackEffect'),
+  playerSprite:       $('playerSprite'),
+  playerImg:          $('playerImg'),
+  bossAttemptsLeft:   $('bossAttemptsLeft'),
+  bossDefeatOverlay:  $('bossDefeatOverlay'),
+  bossDefeatTitle:    $('bossDefeatTitle'),
+  bossDefeatSubtitle: $('bossDefeatSubtitle'),
+  bossDefeatDowngrade:$('bossDefeatDowngrade'),
+  btnBossDefeatOk:    $('btnBossDefeatOk'),
+  bqNum1:          $('bqNum1'),
+  bqNum2:          $('bqNum2'),
+  bossQuestion:    $('bossQuestion'),
+  bossAnswerInput: $('bossAnswerInput'),
+  bossMessage:     $('bossMessage'),
+  victoryOverlay:  $('victoryOverlay'),
+  victoryTime:     $('victoryTime'),
+  btnRestart:      $('btnRestart'),
+  startSwordImg:   $('startSwordImg'),
+  victorySwordImg: $('victorySwordImg'),
+};
+
+// ═══════════════════════════════════════════════════════════
+// UI 업데이트
+// ═══════════════════════════════════════════════════════════
+function updateHeaderStats() {
+  const rate = stats.totalAttempts > 0 ? Math.round((stats.totalCorrect / stats.totalAttempts) * 100) : 0;
+  els.headerAccuracy.textContent = rate + '%';
+  els.headerCorrect.textContent = stats.totalCorrect;
+  const r30 = getRecent30Rate();
+  els.headerRecent.textContent = r30 !== null ? r30 + '%' : '-%';
+}
+
+function updateQuestion() {
+  if (!state.practiceQueue || state.practiceQueue.length === 0) {
+    generatePracticeQueue();
+  }
+  const q = state.practiceQueue[state.practiceQueueIdx];
+  state.currentQuestionDan = q.dan;
+  state.currentMultiplier  = q.mult;
+  els.danNumber.textContent = state.currentDan - 1;
+  els.qNum1.textContent = q.dan;
+  els.qNum2.textContent = q.mult;
+  els.stageLabel.textContent = `강화 ${state.currentDan - 1}단계...`;
+  const progress = (state.practiceQueueIdx / 9) * 100;
+  els.forgeProgressBar.style.width = progress + '%';
+  maybePreloadUpcomingBoss();
+}
+
+function updateSword() {
+  const lvl = Math.min(state.swordLevel, SWORD_LEVELS.length - 1);
+  const sword = SWORD_LEVELS[lvl];
+  els.swordImg.alt = sword.alt;
+  els.upgradeLevel.textContent = sword.name;
+  els.swordImg.src = swordImagePath(state.swordLevel + 1);
+}
+
+function updateDanPills() {
+  let html = '';
+  for (let d = 2; d <= 9; d++) {
+    const mastered = state.danMastery[d];
+    const current = d === state.currentDan && !mastered;
+    const cls = mastered ? 'mastered' : current ? 'current' : '';
+    html += `<div class="pill ${cls}">${d - 1}</div>`;
+  }
+  els.danPills.innerHTML = html;
+}
+
+function showMessage(text, type) {
+  els.forgeMessage.textContent = text;
+  els.forgeMessage.className = 'message ' + type;
+  els.forgeMessage.style.animation = 'none';
+  void els.forgeMessage.offsetWidth;
+  els.forgeMessage.style.animation = '';
+}
+
+function clearMessage() {
+  els.forgeMessage.textContent = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// 스파크 이펙트
+// ═══════════════════════════════════════════════════════════
+function spawnSparks(count) {
+  const container = els.sparkContainer;
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('div');
+    spark.className = 'spark';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 80;
+    spark.style.left = '50%';
+    spark.style.top = '50%';
+    spark.style.setProperty('--sx', Math.cos(angle) * dist + 'px');
+    spark.style.setProperty('--sy', Math.sin(angle) * dist + 'px');
+    spark.style.background = Math.random() > 0.5 ? 'var(--gold)' : 'var(--accent)';
+    container.appendChild(spark);
+    setTimeout(() => spark.remove(), 600);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 플로팅 텍스트
+// ═══════════════════════════════════════════════════════════
+function floatText(text, color, x, y) {
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 힌트 시스템 (냉각수)
+// ═══════════════════════════════════════════════════════════
+function showHint(a, b) {
+  const terms = Array(b).fill(a).join(' + ');
+  els.hintContent.textContent = `${a}를 ${b}번 더하면? (${terms})`;
+  els.hintBox.classList.add('visible');
+}
+
+function hideHint() {
+  els.hintBox.classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 강화 (정답/오답 처리)
+// ═══════════════════════════════════════════════════════════
+let inputLocked = false;
+
+function submitAnswer() {
+  if (inputLocked) return;
+  const val = els.answerInput.value.trim();
+  if (val === '') return;
+  const answer = parseInt(val, 10);
+  const correct = state.currentQuestionDan * state.currentMultiplier;
+
+  stats.totalAttempts++;
+
+  if (answer === correct) {
+    handleCorrect();
+  } else {
+    handleWrong();
+  }
+
+  els.answerInput.value = '';
+  saveState();
+  updateHeaderStats();
+}
+
+function handleCorrect() {
+  stats.totalCorrect++;
+  pushResult(true);
+
+  playBlacksmithSound();
+
+  els.gameContainer.classList.add('shake');
+  setTimeout(() => els.gameContainer.classList.remove('shake'), 400);
+
+  els.answerInput.classList.add('correct');
+  setTimeout(() => els.answerInput.classList.remove('correct'), 500);
+
+  spawnSparks(12);
+  showMessage(`깡! 강화 성공! ${state.currentQuestionDan} × ${state.currentMultiplier} = ${state.currentQuestionDan * state.currentMultiplier}`, 'success');
+  hideHint();
+
+  const rect = els.swordDisplay.getBoundingClientRect();
+  floatText('+1', 'var(--success)', rect.left + rect.width / 2, rect.top);
+
+  state.practiceQueueIdx++;
+
+  if (state.practiceQueueIdx >= 9) {
+    state.danMastery[state.currentDan] = true;
+    state.swordLevel = Math.min(state.swordLevel + 1, SWORD_LEVELS.length - 1);
+    updateSword();
+    showMessage(`+${state.currentDan - 1}단계 창 획득! 보스전 돌입!`, 'success');
+
+    inputLocked = true;
+    setTimeout(() => {
+      inputLocked = false;
+      startBoss(state.currentDan);
+    }, 1200);
+  } else {
+    updateQuestion();
+  }
+
+  updateDanPills();
+}
+
+function handleWrong() {
+  pushResult(false);
+  playFailSound();
+
+  els.answerInput.classList.add('wrong');
+  setTimeout(() => els.answerInput.classList.remove('wrong'), 400);
+
+  // 화면 전체 붉은 플래시 + 검 흔들림
+  document.body.classList.add('fail-flash');
+  els.gameContainer.classList.add('crack-shake');
+  els.swordDisplay.classList.add('sword-crack');
+  setTimeout(() => {
+    document.body.classList.remove('fail-flash');
+    els.gameContainer.classList.remove('crack-shake');
+  }, 800);
+
+  inputLocked = true;
+
+  // 강등 계산
+  const fromDan = state.currentDan;
+  const fromMult = state.currentMultiplier;
+  const fromQuestionDan = state.currentQuestionDan;
+
+  let toDan, toMult;
+  if (fromDan > 2) {
+    toDan  = fromDan - 1;
+    toMult = 1;
+  } else {
+    toDan  = 2;
+    toMult = 1;
+  }
+
+  // 실패 오버레이 내용 설정
+  els.failSubtitle.textContent =
+    `정답은 ${fromQuestionDan} × ${fromMult} = ${fromQuestionDan * fromMult} 입니다!`;
+  if (fromDan > 2) {
+    els.failDowngrade.innerHTML =
+      `강화 단계: <b>${fromDan - 1}단계</b> → <b>${toDan - 1}단계</b> 처음으로 강등…`;
+  } else {
+    els.failDowngrade.innerHTML =
+      `<b>1단계</b> 강화를 처음부터 다시 시작합니다…`;
+  }
+
+  setTimeout(() => {
+    els.swordDisplay.classList.remove('sword-crack');
+    // 실패 오버레이 표시
+    els.failOverlay.classList.add('active');
+    // 상태 강등
+    state.currentDan        = toDan;
+    state.currentMultiplier = toMult;
+    state.practiceQueue     = [];
+    state.practiceQueueIdx  = 0;
+    // 강등된 단의 마스터 취소
+    state.danMastery[fromDan] = false;
+    if (fromDan > 2) state.danMastery[toDan] = false;
+    // 검 레벨도 한 단계 낮춤 (최소 0)
+    state.swordLevel = Math.max(0, state.swordLevel - 1);
+    saveState();
+    updateDanPills();
+    updateSword();
+  }, 900);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 보스전
+// ═══════════════════════════════════════════════════════════
+/** 보스 HP당 허용 오답 수: 오답이 이 횟수를 넘으면 보스전 패배 */
+const BOSS_MAX_WRONG = 3;
+const BOSS_PHASE2_MAX_WRONG = 4;
+
+let bossState = { 
+  dan: 2, 
+  hp: 0, 
+  maxHp: 0, 
+  questions: [], 
+  qIdx: 0, 
+  wrongCount: 0, 
+  maxWrong: BOSS_MAX_WRONG,
+  isPhase2: false,
+  usedDans: []
+};
+
+function updateBossAttemptsUI() {
+  const left = bossState.maxWrong - bossState.wrongCount;
+  const hearts = '❤️'.repeat(Math.max(left, 0)) + '🖤'.repeat(Math.max(bossState.maxWrong - left, 0));
+  els.bossAttemptsLeft.textContent = `도전 기회: ${hearts}`;
+  els.bossAttemptsLeft.classList.toggle('warning', left <= 1);
+}
+
+function saveBossSnapshot() {
+  state.bossSnapshot = {
+    dan: bossState.dan,
+    hp: bossState.hp,
+    maxHp: bossState.maxHp,
+    questions: deepCopy(bossState.questions),
+    qIdx: bossState.qIdx,
+    wrongCount: bossState.wrongCount,
+    maxWrong: bossState.maxWrong,
+    isPhase2: bossState.isPhase2,
+  };
+}
+
+async function startBoss(dan, isPhase2 = false) {
+  state.inBoss = true;
+  state.inBossPhase2 = isPhase2;
+
+  const bossIdx = dan - 2;
+  const boss = BOSS_DATA[bossIdx];
+
+  const questions = [];
+  const pool = [];
+  
+  if (isPhase2) {
+    // 2페이즈: 2~9단 무작위 (중복 허용)
+    const allDans = [2, 3, 4, 5, 6, 7, 8, 9];
+    for (let i = 0; i < boss.hp * 2; i++) {
+      const randomDan = allDans[Math.floor(Math.random() * allDans.length)];
+      const randomMult = Math.floor(Math.random() * 8) + 2;
+      questions.push({ dan: randomDan, mult: randomMult });
+    }
+  } else {
+    // 1페이즈: 전체 단 무작위
+    for (let i = 0; i < boss.hp; i++) {
+      questions.push({
+        dan:  Math.floor(Math.random() * 8) + 2,
+        mult: Math.floor(Math.random() * 8) + 2
+      });
+    }
+  }
+
+  bossState = {
+    dan,
+    hp: isPhase2 ? boss.hp * 2 : boss.hp,
+    maxHp: isPhase2 ? boss.hp * 2 : boss.hp,
+    questions,
+    qIdx: 0,
+    wrongCount: 0,
+    maxWrong: isPhase2 ? BOSS_PHASE2_MAX_WRONG : BOSS_MAX_WRONG,
+    isPhase2,
+    usedDans: []
+  };
+
+  saveBossSnapshot();
+  saveState();
+
+  if (isPhase2) {
+    els.bossName.textContent = `💀 ${boss.name} — 각성 형태`;
+  } else {
+    els.bossName.textContent = `🐉 ${boss.name}`;
+  }
+  els.bossImg.alt = boss.alt;
+  els.bossHpFill.style.width = '100%';
+  els.bossMessage.textContent = '';
+  els.bossAnswerInput.value = '';
+
+  updateBossAttemptsUI();
+  updateBossQuestion();
+
+  const imgFile = boss.img;
+  const curAttr = els.bossImg.getAttribute('src') || '';
+  const alreadyShowing =
+    curAttr === imgFile ||
+    (els.bossImg.src && els.bossImg.src.replace(/^.*\//, '') === imgFile);
+  if (!alreadyShowing) els.bossSprite.classList.add('boss-img-pending');
+  els.bossOverlay.classList.add('active');
+
+  await preloadBossImage(imgFile);
+  els.bossImg.src = imgFile;
+  try {
+    if (els.bossImg.decode) await els.bossImg.decode();
+  } catch (_) {}
+
+  els.bossSprite.classList.remove('boss-img-pending');
+  els.bossAnswerInput.focus();
+}
+
+function updateBossQuestion() {
+  const q = bossState.questions[bossState.qIdx];
+  els.bqNum1.textContent = q.dan;
+  els.bqNum2.textContent = q.mult;
+}
+
+function submitBossAnswer() {
+  const val = els.bossAnswerInput.value.trim();
+  if (val === '') return;
+  const answer = parseInt(val, 10);
+  const q = bossState.questions[bossState.qIdx];
+  const correct = q.dan * q.mult;
+
+  stats.totalAttempts++;
+
+  if (answer === correct) {
+    stats.totalCorrect++;
+    pushResult(true);
+
+    playAttackSwingSound();
+
+    els.playerSprite.classList.add('attacking');
+    setTimeout(() => els.playerSprite.classList.remove('attacking'), 400);
+    
+    setTimeout(() => {
+      // 보스 스프라이트 흔들림
+      els.bossSprite.classList.add('hit');
+      setTimeout(() => els.bossSprite.classList.remove('hit'), 500);
+      
+      // 공격 이펙트 재생
+      els.bossAttackEffect.classList.add('active');
+      setTimeout(() => {
+        els.bossAttackEffect.classList.remove('active');
+      }, 600);
+    }, 200);
+
+    bossState.hp--;
+    const pct = Math.max(0, (bossState.hp / bossState.maxHp) * 100);
+    els.bossHpFill.style.width = pct + '%';
+
+    const swordLvl = state.swordLevel;
+    const dmg = swordLvl + 1;
+    const rect = els.bossSprite.getBoundingClientRect();
+    floatText(`-${dmg} DMG`, 'var(--gold)', rect.left + rect.width / 2, rect.top);
+
+    els.bossMessage.textContent = `⚔ ${correct}! 대미지 ${dmg}!`;
+    els.bossMessage.style.color = 'var(--success)';
+
+    if (bossState.hp <= 0) {
+      // 9단 1페이즈 클리어 시 2페이즈 전환
+      if (bossState.dan === 9 && !bossState.isPhase2) {
+        els.bossMessage.textContent = '⚠️ 보스가 각성합니다!';
+        playVictorySound();
+        
+        // 번쩍이는 임팩트
+        setTimeout(() => {
+          els.bossSprite.style.filter = 'brightness(3) saturate(2)';
+          setTimeout(() => { els.bossSprite.style.filter = 'brightness(0.5)'; }, 100);
+          setTimeout(() => { els.bossSprite.style.filter = 'brightness(3) saturate(2)'; }, 250);
+          setTimeout(() => { els.bossSprite.style.filter = 'brightness(0.5)'; }, 350);
+          setTimeout(() => { els.bossSprite.style.filter = 'brightness(3) saturate(2)'; }, 500);
+          setTimeout(() => { 
+            els.bossSprite.style.filter = ''; 
+            els.bossOverlay.classList.remove('active');
+            setTimeout(() => startBoss(9, true), 300);
+          }, 700);
+        }, 1000);
+        
+      } else {
+        // 일반 보스 클리어 또는 9단 2페이즈 클리어
+        els.bossMessage.textContent = '🎉 보스 처치 성공!';
+        playVictorySound();
+        setTimeout(() => finishBoss(), 1500);
+      }
+    } else {
+      bossState.qIdx++;
+      if (bossState.qIdx >= bossState.questions.length) bossState.qIdx = 0;
+      setTimeout(() => updateBossQuestion(), 600);
+    }
+  } else {
+    pushResult(false);
+    playFailSound();
+
+    bossState.wrongCount++;
+    els.bossMessage.textContent = `🔥 빗나감! ${q.dan} × ${q.mult} = ${correct}`;
+    els.bossMessage.style.color = 'var(--danger)';
+    updateBossAttemptsUI();
+
+    if (bossState.wrongCount >= bossState.maxWrong) {
+      // 보스 패배 처리
+      els.bossAnswerInput.value = '';
+      saveBossSnapshot();
+      saveState();
+      updateHeaderStats();
+      setTimeout(() => defeatBoss(), 900);
+      return;
+    }
+
+    bossState.qIdx++;
+    if (bossState.qIdx >= bossState.questions.length) bossState.qIdx = 0;
+    setTimeout(() => updateBossQuestion(), 800);
+  }
+
+  els.bossAnswerInput.value = '';
+  saveBossSnapshot();
+  saveState();
+  updateHeaderStats();
+}
+
+function defeatBoss() {
+  els.bossOverlay.classList.remove('active');
+
+  state.inBoss = false;
+  state.inBossPhase2 = false;
+  state.bossSnapshot = null;
+
+  const dan = bossState.dan;
+  const boss = BOSS_DATA[dan - 2];
+
+  // 패배 오버레이 내용 설정
+  els.bossDefeatTitle.textContent = `💀 ${boss.name} 토벌 실패!`;
+  els.bossDefeatSubtitle.textContent = `${BOSS_MAX_WRONG}번의 기회를 모두 소진했습니다…`;
+  els.bossDefeatDowngrade.innerHTML =
+    `<b>${dan - 1}단계</b> 강화를 처음부터 다시 시작합니다.`;
+
+  // 상태 초기화: 해당 단 강화를 처음부터
+  state.danMastery[dan] = false;
+  state.currentDan = dan;
+  state.currentMultiplier = 1;
+  state.practiceQueue = [];
+  state.practiceQueueIdx = 0;
+  // 검 레벨 한 단계 낮춤
+  state.swordLevel = Math.max(0, state.swordLevel - 1);
+  saveState();
+  updateSword();
+  updateDanPills();
+
+  els.bossDefeatOverlay.classList.add('active');
+}
+
+function finishBoss() {
+  els.bossOverlay.classList.remove('active');
+
+  state.inBoss = false;
+  state.inBossPhase2 = false;
+  state.bossSnapshot = null;
+
+  if (state.currentDan >= 9) {
+    endGame();
+    return;
+  }
+
+  state.currentDan++;
+  state.currentMultiplier = 1;
+  state.practiceQueue = [];
+  state.practiceQueueIdx = 0;
+  saveState();
+  updateQuestion();
+  updateSword();
+  updateDanPills();
+  els.answerInput.focus();
+  showMessage(`${state.currentDan - 1}단계 강화를 시작합니다!`, 'success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 게임 종료
+// ═══════════════════════════════════════════════════════════
+function endGame() {
+  const elapsed = state.speedrunStart ? Date.now() - state.speedrunStart : 0;
+  const timeStr = formatTime(elapsed);
+
+  if (!stats.bestSpeedrun || elapsed < stats.bestSpeedrun) {
+    stats.bestSpeedrun = elapsed;
+  }
+  saveState();
+
+  els.victoryTime.textContent = timeStr;
+  els.victorySwordImg.src = swordImagePath(9);
+  els.victoryOverlay.classList.add('active');
+  playVictorySound();
+}
+
+function formatTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 통계
+// ═══════════════════════════════════════════════════════════
+function openStats() {
+  els.statTotal.textContent = stats.totalCorrect;
+  const rate = stats.totalAttempts > 0 ? Math.round((stats.totalCorrect / stats.totalAttempts) * 100) : 0;
+  els.statAccuracy.textContent = rate + '%';
+  const r30 = getRecent30Rate();
+  els.statRecent30.textContent = r30 !== null ? r30 + '%' : '-%';
+  els.statSpeedrun.textContent = stats.bestSpeedrun ? formatTime(stats.bestSpeedrun) : '--:--';
+
+  let barsHtml = '';
+  for (let i = 0; i < 30; i++) {
+    if (i < stats.last30Results.length) {
+      const cls = stats.last30Results[i] === 1 ? 'correct' : 'wrong';
+      barsHtml += `<div class="recent-bar ${cls}" style="height:${stats.last30Results[i] === 1 ? 100 : 30}%"></div>`;
+    } else {
+      barsHtml += '<div class="recent-bar empty" style="height:20%"></div>';
+    }
+  }
+  els.recentBars.innerHTML = barsHtml;
+
+  let masteryHtml = '';
+  for (let d = 2; d <= 9; d++) {
+    const m = state.danMastery[d];
+    masteryHtml += `
+      <div class="dan-mastery-card ${m ? 'mastered' : ''}">
+        <div class="dan-num" style="color:${m ? 'var(--success)' : 'var(--text-dim)'}">${d}단</div>
+        <div class="dan-status">${m ? '✅ 마스터' : '🔒 미완료'}</div>
+      </div>`;
+  }
+  els.danMasteryGrid.innerHTML = masteryHtml;
+
+  els.statsOverlay.classList.add('active');
+}
+
+function closeStats() {
+  els.statsOverlay.classList.remove('active');
+}
+
+async function resumeBossFromSnapshot(snapshot) {
+  const boss = BOSS_DATA[snapshot.dan - 2];
+
+  bossState = {
+    dan: snapshot.dan,
+    hp: snapshot.hp,
+    maxHp: snapshot.maxHp,
+    questions: deepCopy(snapshot.questions),
+    qIdx: snapshot.qIdx,
+    wrongCount: snapshot.wrongCount,
+    maxWrong: snapshot.maxWrong,
+    isPhase2: snapshot.isPhase2,
+    usedDans: []
+  };
+
+  if (snapshot.isPhase2) {
+    els.bossName.textContent = `💀 ${boss.name} — 각성 형태`;
+  } else {
+    els.bossName.textContent = `🐉 ${boss.name}`;
+  }
+  els.bossImg.alt = boss.alt;
+  const pct = Math.max(0, (bossState.hp / bossState.maxHp) * 100);
+  els.bossHpFill.style.width = pct + '%';
+  els.bossMessage.textContent = '';
+  els.bossAnswerInput.value = '';
+
+  updateBossAttemptsUI();
+  updateBossQuestion();
+
+  const imgFile = boss.img;
+  const curAttr = els.bossImg.getAttribute('src') || '';
+  const alreadyShowing =
+    curAttr === imgFile ||
+    (els.bossImg.src && els.bossImg.src.replace(/^.*\//, '') === imgFile);
+  if (!alreadyShowing) els.bossSprite.classList.add('boss-img-pending');
+  els.bossOverlay.classList.add('active');
+
+  await preloadBossImage(imgFile);
+  els.bossImg.src = imgFile;
+  try {
+    if (els.bossImg.decode) await els.bossImg.decode();
+  } catch (_) {}
+
+  els.bossSprite.classList.remove('boss-img-pending');
+  els.bossAnswerInput.focus();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 초기화 / 시작
+// ═══════════════════════════════════════════════════════════
+function initGame(fresh) {
+  if (fresh) {
+    state = deepCopy(DEFAULT_STATE);
+  }
+
+  const resumeBoss = !fresh && state.inBoss;
+  const resumeBossPhase2 = !fresh && !!state.inBossPhase2;
+
+  state.speedrunStart = Date.now();
+  saveState();
+
+  updateQuestion();
+  updateSword();
+  updateDanPills();
+  updateHeaderStats();
+  hideHint();
+  clearMessage();
+
+  els.startOverlay.classList.add('hidden');
+  setTimeout(() => { els.startOverlay.style.display = 'none'; }, 500);
+
+  if (resumeBoss) {
+    setTimeout(() => {
+      if (state.bossSnapshot) {
+        resumeBossFromSnapshot(state.bossSnapshot);
+      } else {
+        startBoss(state.currentDan, resumeBossPhase2);
+      }
+    }, 600);
+  } else {
+    els.answerInput.focus();
+  }
+}
+
+function restartGame() {
+  els.victoryOverlay.classList.remove('active');
+  state = deepCopy(DEFAULT_STATE);
+  state.speedrunStart = Date.now();
+  saveState();
+  updateQuestion();
+  updateSword();
+  updateDanPills();
+  updateHeaderStats();
+  hideHint();
+  clearMessage();
+  els.forgeProgressBar.style.width = '0%';
+  els.answerInput.focus();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 이벤트 바인딩
+// ═══════════════════════════════════════════════════════════
+els.btnStart.addEventListener('pointerdown', e => { e.preventDefault(); initGame(true); }, { passive: false });
+els.btnContinue.addEventListener('pointerdown', e => { e.preventDefault(); initGame(false); }, { passive: false });
+document.getElementById('btnMulti').addEventListener('pointerdown', e => { e.preventDefault(); location.href = 'multi.html'; }, { passive: false });
+
+// 모바일에서 가상 키보드 방지
+els.answerInput.addEventListener('focus', (e) => {
+  e.target.blur();
+  setTimeout(() => e.target.focus(), 0);
+});
+els.answerInput.addEventListener('click', (e) => {
+  e.preventDefault();
+});
+
+els.answerInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitAnswer();
+});
+
+document.getElementById('numpad').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const val = btn.dataset.val;
+  if (val === 'clear') {
+    els.answerInput.value = '';
+  } else if (val === 'enter') {
+    submitAnswer();
+  } else {
+    els.answerInput.value += val;
+  }
+}, { passive: false });
+
+// 모바일에서 가상 키보드 방지
+els.bossAnswerInput.addEventListener('focus', (e) => {
+  e.target.blur();
+  setTimeout(() => e.target.focus(), 0);
+});
+els.bossAnswerInput.addEventListener('click', (e) => {
+  e.preventDefault();
+});
+
+els.bossAnswerInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitBossAnswer();
+});
+
+document.getElementById('bossNumpad').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const val = btn.dataset.val;
+  if (val === 'clear') {
+    els.bossAnswerInput.value = '';
+  } else if (val === 'enter') {
+    submitBossAnswer();
+  } else {
+    els.bossAnswerInput.value += val;
+  }
+}, { passive: false });
+
+els.btnOpenStats.addEventListener('pointerdown', e => { e.preventDefault(); openStats(); }, { passive: false });
+els.btnCloseStats.addEventListener('pointerdown', e => { e.preventDefault(); closeStats(); }, { passive: false });
+els.statsOverlay.addEventListener('pointerdown', e => {
+  if (e.target === els.statsOverlay) closeStats();
+});
+
+els.btnRestart.addEventListener('pointerdown', e => { e.preventDefault(); restartGame(); }, { passive: false });
+
+els.btnFailOk.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  els.failOverlay.classList.remove('active');
+  inputLocked = false;
+  updateQuestion();
+  hideHint();
+  clearMessage();
+}, { passive: false });
+
+els.btnBossDefeatOk.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  els.bossDefeatOverlay.classList.remove('active');
+  updateQuestion();
+  clearMessage();
+  showMessage(`${state.currentDan - 1}단계 강화를 다시 시작합니다!`, 'fail');
+}, { passive: false });
+
+// ═══════════════════════════════════════════════════════════
+// 부팅
+// ═══════════════════════════════════════════════════════════
+(function boot() {
+  const hasSave = loadState();
+  if (hasSave && stats.totalAttempts > 0) {
+    els.btnContinue.classList.remove('hidden');
+  }
+  els.startSwordImg.src = swordImagePath(1);
+  els.playerImg.src = PLAYER_CHARACTER_IMG;
+  updateSword();
+  updateDanPills();
+  updateHeaderStats();
+  maybePreloadUpcomingBoss();
+})();
+</script>
+</body>
+</html>

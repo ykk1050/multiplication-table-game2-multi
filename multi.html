@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <!--
+    user-scalable=no : 전자칠판 터치 시 실수로 전체 화면이 확대되지 않도록 잠금
+    각 iframe은 독립된 브라우징 컨텍스트이므로 한 플레이어의 터치가 다른 플레이어에게 절대 간섭하지 않음
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>구구단 대장간2 — 4인 동시 플레이</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0d0d14;
+      touch-action: none; /* 바깥 페이지의 핀치-줌·스크롤 차단 */
+    }
+
+    /* ── 가로 1×4 분할 ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: 1fr;
+      width: 100vw;
+      height: 100vh;
+      gap: 4px;
+      background: #2a2a3c; /* gap 자체가 구분선 역할 */
+    }
+
+    /* ── 각 플레이어 영역 ── */
+    .player-cell {
+      position: relative;
+      overflow: hidden;
+      background: #0d0d14;
+    }
+
+    /* iframe 크기·위치·스케일은 JS에서 인라인으로 주입 */
+    .player-cell iframe {
+      position: absolute;
+      display: block;
+      border: none;
+      /* 바깥 touch-action:none 이 iframe 내부 터치를 막지 않도록 복원 */
+      touch-action: auto;
+    }
+
+    /* ── 플레이어 번호 뱃지 (iframe 바깥, 터치 비간섭) ── */
+    .player-label {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(255, 106, 0, 0.92);
+      color: #fff;
+      font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+      font-size: 0.9rem;
+      font-weight: bold;
+      padding: 5px 16px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      pointer-events: none; /* 터치 이벤트를 가로채지 않음 */
+      user-select: none;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+    }
+  </style>
+</head>
+<body>
+
+<div class="grid">
+  <div class="player-cell">
+    <iframe src="index.html?p=1" title="플레이어 1" scrolling="no"></iframe>
+    <div class="player-label">P 1</div>
+  </div>
+  <div class="player-cell">
+    <iframe src="index.html?p=2" title="플레이어 2" scrolling="no"></iframe>
+    <div class="player-label">P 2</div>
+  </div>
+  <div class="player-cell">
+    <iframe src="index.html?p=3" title="플레이어 3" scrolling="no"></iframe>
+    <div class="player-label">P 3</div>
+  </div>
+  <div class="player-cell">
+    <iframe src="index.html?p=4" title="플레이어 4" scrolling="no"></iframe>
+    <div class="player-label">P 4</div>
+  </div>
+</div>
+
+<script>
+  /*
+   * 설계 크기 (FRAME_W × FRAME_H)
+   * ─────────────────────────────────────────────────────────────
+   * FRAME_W = 460px   → 768px 미만이므로 게임의 mobile(세로 스택) CSS 레이아웃이 적용됨
+   * FRAME_H = 1280px  → 헤더 + 대장간 패널 + 입력 패널(숫자패드 포함) 전체가
+   *                     스크롤 없이 표시되기에 충분한 높이
+   *
+   * 스케일 계산:
+   *   scale = min(셀너비 / FRAME_W,  셀높이 / FRAME_H)
+   *   → 비율을 유지하면서 셀 높이를 꽉 채우고 수평 가운데 정렬
+   *
+   * 1920×1080 기준 (4분할 셀 ≈ 477×1080px)
+   *   scale ≈ 0.844  →  게임 표시 크기 ≈ 388×1080px (양쪽 44px 여백)
+   *
+   * 3840×2160 (4K) 기준 (셀 ≈ 957×2160px)
+   *   scale ≈ 1.688  →  게임 표시 크기 ≈ 777×2160px (양쪽 90px 여백)
+   */
+  const FRAME_W = 460;
+  const FRAME_H = 1280;
+
+  function applyLayout() {
+    document.querySelectorAll('.player-cell').forEach(cell => {
+      const iframe = cell.querySelector('iframe');
+      const cW = cell.offsetWidth;
+      const cH = cell.offsetHeight;
+
+      const scale    = Math.min(cW / FRAME_W, cH / FRAME_H);
+      const scaledW  = FRAME_W * scale;
+      const scaledH  = FRAME_H * scale;
+
+      iframe.style.width           = FRAME_W + 'px';
+      iframe.style.height          = FRAME_H + 'px';
+      iframe.style.transform       = `scale(${scale})`;
+      iframe.style.transformOrigin = 'top left';
+      /* 수평·수직 가운데 정렬 */
+      iframe.style.left = Math.round((cW - scaledW) / 2) + 'px';
+      iframe.style.top  = Math.round((cH - scaledH) / 2) + 'px';
+    });
+  }
+
+  window.addEventListener('load',   applyLayout);
+  window.addEventListener('resize', applyLayout);
+</script>
+
+</body>
+</html>

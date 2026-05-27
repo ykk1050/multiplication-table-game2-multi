@@ -1,1 +1,1 @@
-# multiplication-table-game2-multi
+# multiplication-table-game2
