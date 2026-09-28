@@ -858,6 +858,14 @@ body {
   mix-blend-mode: screen;
   animation: glowPulse 2s infinite;
 }
+.start-buttons {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 14px;
+}
 .btn-start {
   background: linear-gradient(135deg, var(--accent), #e05500);
   border: none;
@@ -871,7 +879,6 @@ body {
 }
 .btn-start:hover { transform: scale(1.06); box-shadow: 0 6px 30px rgba(255, 106, 0, 0.5); }
 .btn-continue {
-  margin-top: 12px;
   background: transparent;
   border: 2px solid var(--panel-border);
   color: var(--text-dim);
@@ -883,7 +890,6 @@ body {
 .btn-continue:hover { border-color: var(--accent); color: var(--text); }
 .btn-continue.hidden { display: none; }
 .btn-multi {
-  margin-top: 12px;
   background: transparent;
   border: 2px solid var(--panel-border);
   color: var(--text-dim);
@@ -893,6 +899,7 @@ body {
   cursor: pointer;
 }
 .btn-multi:hover { border-color: var(--accent); color: var(--text); }
+.btn-multi.hidden { display: none; }
 
 /* ─── Floating text ─── */
 .float-text {
@@ -988,11 +995,21 @@ body {
 
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
-  .game-container { flex-direction: column; height: auto; }
-  .forge-panel { min-height: 300px; }
-  .input-panel { width: 100%; border-left: none; border-top: 2px solid var(--panel-border); }
+  /* 전자칠판 4인 분할: 세로 공간을 끝까지 채워 숫자 버튼을 화면 아래로 내림 */
+  .game-container { flex-direction: column; height: calc(100vh - 56px); }
+  .forge-panel { flex: 1 1 auto; min-height: 200px; padding: 12px; }
+  .input-panel { width: 100%; flex: 0 0 auto; border-left: none; border-top: 2px solid var(--panel-border); }
   .header-stats { display: none; }
+  .start-buttons { gap: 10px; }
+  .btn-start { font-size: 1.15rem; padding: 14px 26px; }
+  .btn-continue, .btn-multi { font-size: 0.95rem; padding: 14px 20px; }
 }
+
+/* iframe(4인 멀티) 안에서는 시작 버튼을 화면 아래쪽으로 내림 — 키 작은 학생 접근성 */
+body.embedded .start-overlay { justify-content: flex-start; padding: 6vh 10px 7vh; }
+body.embedded .start-overlay .sub { margin-bottom: 20px; }
+body.embedded .start-sword { margin-bottom: 20px; }
+body.embedded .start-buttons { margin-top: auto; }
 </style>
 </head>
 <body>
@@ -1004,9 +1021,11 @@ body {
   <div class="start-sword">
     <img src="" id="startSwordImg" alt="초보 대장장이의 녹슨 단검 — 손잡이는 나무, 날은 녹이 슨 회색 철 단검, 흰색 배경, 픽셀아트 스타일" />
   </div>
-  <button class="btn-start" id="btnStart">🔨 강화 시작!</button>
-  <button class="btn-continue hidden" id="btnContinue">⚡ 이어하기</button>
-  <button class="btn-multi" id="btnMulti">👥 4인 멀티플레이 (전자칠판)</button>
+  <div class="start-buttons">
+    <button class="btn-start" id="btnStart">🔨 강화 시작!</button>
+    <button class="btn-continue hidden" id="btnContinue">⚡ 이어하기</button>
+    <button class="btn-multi" id="btnMulti">👥 4인 멀티플레이 (전자칠판)</button>
+  </div>
 </div>
 
 <!-- ═══ Header ═══ -->
@@ -2202,7 +2221,15 @@ function restartGame() {
 // ═══════════════════════════════════════════════════════════
 els.btnStart.addEventListener('pointerdown', e => { e.preventDefault(); initGame(true); }, { passive: false });
 els.btnContinue.addEventListener('pointerdown', e => { e.preventDefault(); initGame(false); }, { passive: false });
-document.getElementById('btnMulti').addEventListener('pointerdown', e => { e.preventDefault(); location.href = 'multi.html'; }, { passive: false });
+// iframe(4인 멀티) 안에서는 멀티 버튼을 숨기고, 시작 버튼을 아래쪽으로 내림
+const IS_IN_IFRAME = window.self !== window.top;
+const _btnMulti = document.getElementById('btnMulti');
+if (IS_IN_IFRAME) {
+  _btnMulti.classList.add('hidden');
+  document.body.classList.add('embedded');
+} else {
+  _btnMulti.addEventListener('pointerdown', e => { e.preventDefault(); location.href = 'multi.html'; }, { passive: false });
+}
 
 // 모바일에서 가상 키보드 방지
 els.answerInput.addEventListener('focus', (e) => {
