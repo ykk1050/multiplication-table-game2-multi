@@ -624,22 +624,36 @@ body {
 
 /* ── Portrait / narrow screens: stack vertically ── */
 @media (max-width: 600px), (orientation: portrait) {
+  /* 전자칠판 4인 분할처럼 세로로 긴 화면:
+     보스전을 화면 아래쪽에 붙이고 크게 키운다 (키 작은 학생 접근성) */
+  .boss-overlay {
+    align-items: flex-end;
+    padding: 12px 12px 24px;
+  }
   .boss-layout {
     flex-direction: column;
     align-items: center;
+    justify-content: flex-end;
     gap: 14px;
     max-width: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .boss-left { gap: 6px; }
-  .boss-right { flex: 0 0 auto; }
-  .boss-scene { gap: 16px; }
-  .player-sprite { width: 80px; height: 120px; }
-  .boss-sprite { width: 120px; height: 150px; }
-  .boss-question { font-size: 1.6rem; }
-  .boss-numpad { max-width: 240px; }
-  .boss-numpad button { padding: 10px; font-size: 1.2rem; }
+  .boss-left { gap: 8px; width: 100%; }
+  .boss-right { flex: 0 0 auto; width: 100%; }
+  .boss-hp-container { max-width: 100%; }
+  .boss-name { font-size: 1.25rem; }
+  .boss-hp-bar { height: 20px; }
+  .boss-scene { gap: 18px; }
+  .player-sprite { width: 120px; height: 170px; }
+  .boss-sprite { width: 180px; height: 220px; }
+  .boss-question { font-size: 2.2rem; }
+  .boss-message { font-size: 1.1rem; height: 30px; }
+  .boss-attempts-left { font-size: 1rem; }
+  .boss-input-row { width: 100%; max-width: 340px; margin: 0 auto; }
+  .boss-answer-input { font-size: 2rem; max-width: 100%; padding: 10px 12px; }
+  .boss-numpad { max-width: 340px; gap: 8px; }
+  .boss-numpad button { padding: 16px; font-size: 1.6rem; }
 }
 
 .boss-damage-text {
