@@ -2219,8 +2219,26 @@ function restartGame() {
 // ═══════════════════════════════════════════════════════════
 // 이벤트 바인딩
 // ═══════════════════════════════════════════════════════════
-els.btnStart.addEventListener('pointerdown', e => { e.preventDefault(); initGame(true); }, { passive: false });
-els.btnContinue.addEventListener('pointerdown', e => { e.preventDefault(); initGame(false); }, { passive: false });
+// 전자칠판 멀티터치 대응:
+// click 은 primary 포인터(가장 먼저 닿은 손가락) 하나에만 생성되므로,
+// 여러 명이 동시에 눌러도 각자 시작되도록 pointerdown 으로 처리한다.
+// (포인터 이벤트 미지원 환경에서는 touchstart 로 대체)
+let _started = false;
+function bindStart(el, fresh) {
+  const fire = e => {
+    e.preventDefault();
+    if (_started) return;
+    _started = true;
+    initGame(fresh);
+  };
+  el.addEventListener('pointerdown', fire, { passive: false });
+  if (!window.PointerEvent) {
+    el.addEventListener('touchstart', fire, { passive: false });
+    el.addEventListener('click', fire);
+  }
+}
+bindStart(els.btnStart, true);
+bindStart(els.btnContinue, false);
 // iframe(4인 멀티) 안에서는 멀티 버튼을 숨기고, 시작 버튼을 아래쪽으로 내림
 const IS_IN_IFRAME = window.self !== window.top;
 const _btnMulti = document.getElementById('btnMulti');
